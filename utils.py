@@ -70,11 +70,11 @@ def calculate_streak(habit_id: int):
             if log.completed is True:
                 current_streak += 1
             elif log.completed is False:
-                # شکست واقعی — استریک را می‌شکند
+  
                 break
-            # None: بدون پاسخ — از استریک فعلی رد می‌شویم ولی نمی‌شکنیم
 
-        # محاسبه بهترین استریک (فقط True‌های متوالی، False می‌شکند)
+
+ 
         best_streak = 0
         temp_streak = 0
         for log in reversed(logs):
@@ -83,7 +83,7 @@ def calculate_streak(habit_id: int):
                 best_streak = max(best_streak, temp_streak)
             elif log.completed is False:
                 temp_streak = 0
-            # None: بدون پاسخ — نه اضافه می‌کند نه می‌شکند
+
 
         return current_streak, best_streak
     finally:
@@ -104,7 +104,6 @@ def check_consecutive_fails(habit_id: int, threshold: int = 3):
         if len(recent_logs) < threshold:
             return False
 
-        # هر لاگی که True نباشد (False یا None) به عنوان ناموفق حساب می‌شود
         return all(log.completed is not True for log in recent_logs)
     finally:
         session.close()

@@ -108,11 +108,10 @@ class ReminderScheduler:
         try:
             no_response_logs = session.query(DailyLog).filter(
                 DailyLog.log_date == date.today(),
-                DailyLog.completed == None  # noqa: E711
+                DailyLog.completed == None  
             ).all()
 
             count = len(no_response_logs)
-            # این لاگ‌ها را تغییر نمی‌دهیم — None به معنای "بدون پاسخ" باقی می‌ماند
             print(f"ℹ️ {count} لاگ بدون پاسخ برای امروز ثبت شد")
 
         except Exception as e:

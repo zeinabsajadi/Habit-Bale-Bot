@@ -16,8 +16,7 @@ class BotHandlers:
     def get_main_menu_keyboard(self):
         """ایجاد منوی اصلی ربات"""
         keyboard = MenuKeyboardMarkup()
-    
-    # اضافه کردن هر دکمه به صورت جداگانه با مشخص کردن ردیف
+
         keyboard.add(MenuKeyboardButton("➕ افزودن عادت"), row=0)
         keyboard.add(MenuKeyboardButton("📋 عادت‌های من"), row=0)
         keyboard.add(MenuKeyboardButton("📊 آمار"), row=1)

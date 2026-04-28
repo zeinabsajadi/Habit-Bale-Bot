@@ -6,10 +6,10 @@ from database import init_db
 from handlers import BotHandlers
 from scheduler import ReminderScheduler
 
-# ایجاد bot
+
 bot = Bot(token=Config.BOT_TOKEN)
 
-# ایجاد handlers و scheduler
+
 handlers = BotHandlers(bot)
 scheduler = ReminderScheduler(bot)
 
@@ -25,13 +25,12 @@ async def on_ready():
 @bot.event
 async def on_message(message: Message):
     """مدیریت پیام‌ها"""
-    # نادیده گرفتن پیام‌های ربات‌ها
+
     if message.author.is_bot:
         return
 
     text = message.text
 
-    # اگر پیام متنی نباشد (مثلاً استیکر یا عکس)
     if not text:
         return
 

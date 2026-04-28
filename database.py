@@ -42,11 +42,7 @@ class DailyLog(Base):
 
 
 def _run_migrations():
-    """
-    اجرای migration های لازم روی دیتابیس موجود.
-    این تابع به صورت ایمن ستون‌های جدید را اضافه می‌کند
-    و در صورت وجود قبلی، خطایی نمی‌دهد.
-    """
+
     with engine.connect() as conn:
         try:
             result = conn.execute(text("PRAGMA table_info(daily_logs)"))
