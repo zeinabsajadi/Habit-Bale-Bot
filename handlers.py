@@ -1,10 +1,10 @@
-# handlers.py
 from bale import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import get_session, User, Habit, DailyLog
 from messages import Messages
 from utils import parse_time, get_habit_stats, check_consecutive_fails, generate_progress_graph
 from datetime import date, datetime
 from config import Config
+import random
 
 
 class BotHandlers:
@@ -130,6 +130,11 @@ class BotHandlers:
                 graph = generate_progress_graph(logs, habit.start_date)
                 text += graph
 
+                # --- نمایش دلایل عدم انجام عادت ---
+                failure_summary = generate_failure_reason_summary(logs)
+                if failure_summary:
+                    text += f"\n\n{failure_summary}"
+
                 await message.reply(text)
 
         except Exception as e:
@@ -225,7 +230,6 @@ class BotHandlers:
                     )
                     return
 
-                # غیرفعال کردن عادت‌های قبلی
                 old_habits = session.query(Habit).filter(
                     Habit.user_id == user_id,
                     Habit.is_active == True
@@ -309,10 +313,42 @@ class BotHandlers:
         finally:
             session.close()
 
+    async def send_failure_reason_menu(self, user_id: int, habit_id: int):
+        """ارسال منوی دلایل عدم انجام عادت"""
+        try:
+            keyboard = InlineKeyboardMarkup()
+
+            # دکمه‌ها را دو‌تا دوتا در هر ردیف قرار می‌دهیم
+            reason_items = list(Messages.FAILURE_REASONS.items())
+            for i, (reason_key, reason_label) in enumerate(reason_items):
+                row_num = i + 1
+                keyboard.add(
+                    InlineKeyboardButton(
+                        reason_label,
+                        callback_data=f"reason_{habit_id}_{reason_key}"
+                    ),
+                    row=row_num
+                )
+
+            # دکمه رد کردن
+            keyboard.add(
+                InlineKeyboardButton(
+                    "⏭️ رد کردن",
+                    callback_data=f"reason_{habit_id}_skip"
+                ),
+                row=len(reason_items) + 1
+            )
+
+            await self.bot.send_message(
+                user_id,
+                Messages.SELECT_FAILURE_REASON,
+                components=keyboard
+            )
+        except Exception as e:
+            print(f"❌ خطا در send_failure_reason_menu: {e}")
+
     async def callback_handler(self, callback: CallbackQuery):
         data = callback.data
-        # در کتابخانه bale، CallbackQuery فاقد متد answer() است
-        # شناسه کاربر از طریق callback.author.user_id یا callback.user.user_id خوانده می‌شود
         try:
             user_id = callback.author.user_id
         except AttributeError:
@@ -339,7 +375,6 @@ class BotHandlers:
                     await self.bot.send_message(user_id, "❌ لاگ امروز یافت نشد.")
                     return
 
-                # اگر قبلاً پاسخ داده شده
                 if log.completed is not None:
                     await self.bot.send_message(user_id, "✅ قبلاً پاسخ این روز رو ثبت کردی.")
                     return
@@ -358,6 +393,7 @@ class BotHandlers:
                     await self.bot.send_message(user_id, reply)
 
                 else:
+                    # ابتدا پیام تشویقی ارسال می‌شود
                     consecutive_fails = check_consecutive_fails(habit_id)
                     reply = Messages.get_random_fail()
 
@@ -365,6 +401,50 @@ class BotHandlers:
                         reply += f"\n\n{Messages.MULTIPLE_FAIL_WARNING}"
 
                     await self.bot.send_message(user_id, reply)
+
+                    # سپس منوی دلایل نمایش داده می‌شود
+                    await self.send_failure_reason_menu(user_id, habit_id)
+
+            elif data.startswith("reason_"):
+                # پردازش انتخاب دلیل عدم انجام عادت
+                # فرمت: reason_{habit_id}_{reason_key}
+                parts = data.split("_", 2)
+                # parts[0] = "reason", parts[1] = habit_id, parts[2] = reason_key
+                if len(parts) < 3:
+                    return
+
+                habit_id = int(parts[1])
+                reason_key = parts[2]
+
+                if reason_key == "skip":
+                    # کاربر رد کرد — بدون ذخیره دلیل
+                    await self.bot.send_message(
+                        user_id,
+                        "باشه! فردا دوباره تلاش کن 💪"
+                    )
+                    return
+
+                # ذخیره دلیل در لاگ امروز
+                log = session.query(DailyLog).filter(
+                    DailyLog.habit_id == habit_id,
+                    DailyLog.log_date == date.today()
+                ).first()
+
+                if log and log.completed is False:
+                    log.failure_reason = reason_key
+                    session.commit()
+
+                # ارسال پاسخ تصادفی مرتبط با دلیل انتخاب‌شده
+                responses = Messages.FAILURE_REASON_RESPONSES.get(reason_key, [])
+                if responses:
+                    reply = random.choice(responses)
+                    reply += Messages.FAILURE_REASON_FOOTER
+                    await self.bot.send_message(user_id, reply)
+                else:
+                    await self.bot.send_message(
+                        user_id,
+                        f"ممنون که دلیلت رو گفتی 💙{Messages.FAILURE_REASON_FOOTER}"
+                    )
 
             elif data.startswith("confirm_change_"):
                 habit_id = int(data.replace("confirm_change_", ""))
@@ -397,3 +477,28 @@ class BotHandlers:
             print(f"❌ خطا در callback_handler: {e}")
         finally:
             session.close()
+
+
+def generate_failure_reason_summary(logs) -> str:
+    """
+    تولید خلاصه دلایل عدم انجام عادت از لاگ‌ها.
+    فقط لاگ‌هایی که failure_reason دارند در نظر گرفته می‌شوند.
+    """
+    reason_counts = {}
+    for log in logs:
+        if log.completed is False and log.failure_reason:
+            reason = log.failure_reason
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    if not reason_counts:
+        return ""
+
+    # مرتب‌سازی بر اساس تعداد (از بیشترین به کمترین)
+    sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
+
+    summary = "📋 دلایل عدم انجام عادت:\n"
+    for reason_key, count in sorted_reasons:
+        label = Messages.FAILURE_REASONS.get(reason_key, reason_key)
+        summary += f"  • {label}: {count} بار\n"
+
+    return summary
