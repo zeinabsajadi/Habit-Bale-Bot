@@ -1,4 +1,5 @@
-from bale import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+# handlers.py
+from bale import Bot, Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, MenuKeyboardMarkup, MenuKeyboardButton
 from database import get_session, User, Habit, DailyLog
 from messages import Messages
 from utils import parse_time, get_habit_stats, check_consecutive_fails, generate_progress_graph
@@ -12,6 +13,23 @@ class BotHandlers:
         self.bot = bot
         self.user_states = {}
 
+    def get_main_menu_keyboard(self):
+        """ایجاد منوی اصلی ربات"""
+        keyboard = MenuKeyboardMarkup()
+    
+    # اضافه کردن هر دکمه به صورت جداگانه با مشخص کردن ردیف
+        keyboard.add(MenuKeyboardButton("➕ افزودن عادت"), row=0)
+        keyboard.add(MenuKeyboardButton("📋 عادت‌های من"), row=0)
+        keyboard.add(MenuKeyboardButton("📊 آمار"), row=1)
+        keyboard.add(MenuKeyboardButton("📈 پیشرفت"), row=1)
+        keyboard.add(MenuKeyboardButton("⏰ تغییر زمان"), row=2)
+        keyboard.add(MenuKeyboardButton("🔄 تغییر عادت"), row=2)
+        keyboard.add(MenuKeyboardButton("💪 انگیزه"), row=3)
+        keyboard.add(MenuKeyboardButton("❓ راهنما"), row=3)
+        keyboard.add(MenuKeyboardButton("🏠 صفحه اصلی"), row=4)
+    
+        return keyboard
+
     async def start_handler(self, message: Message):
         session = get_session()
         try:
@@ -24,18 +42,18 @@ class BotHandlers:
                 session.commit()
 
             self.user_states[message.author.user_id] = {'step': 'waiting_for_habit'}
-            await message.reply(Messages.WELCOME)
+            await message.reply(Messages.WELCOME, components=self.get_main_menu_keyboard())
         except Exception as e:
             print(f"❌ خطا در start_handler: {e}")
         finally:
             session.close()
 
     async def help_handler(self, message: Message):
-        await message.reply(Messages.HELP)
+        await message.reply(Messages.HELP, components=self.get_main_menu_keyboard())
 
     async def addhabit_handler(self, message: Message):
         self.user_states[message.author.user_id] = {'step': 'waiting_for_habit'}
-        await message.reply(Messages.GET_HABIT_NAME)
+        await message.reply(Messages.GET_HABIT_NAME, components=self.get_main_menu_keyboard())
 
     async def myhabits_handler(self, message: Message):
         session = get_session()
@@ -48,7 +66,8 @@ class BotHandlers:
             if not habits:
                 await message.reply(
                     "❌ شما هیچ عادت فعالی ندارید.\n\n"
-                    "برای اضافه کردن عادت جدید از دستور /addhabit استفاده کنید."
+                    "برای اضافه کردن عادت جدید از دستور /addhabit استفاده کنید.",
+                    components=self.get_main_menu_keyboard()
                 )
                 return
 
@@ -58,7 +77,7 @@ class BotHandlers:
                 text += f"   ⏰ زمان یادآوری: {habit.reminder_time.strftime('%H:%M')}\n"
                 text += f"   📅 تاریخ شروع: {habit.start_date.strftime('%Y/%m/%d')}\n\n"
 
-            await message.reply(text)
+            await message.reply(text, components=self.get_main_menu_keyboard())
         except Exception as e:
             print(f"❌ خطا در myhabits_handler: {e}")
         finally:
@@ -73,7 +92,7 @@ class BotHandlers:
             ).all()
 
             if not habits:
-                await message.reply("❌ شما هیچ عادت فعالی ندارید.")
+                await message.reply("❌ شما هیچ عادت فعالی ندارید.", components=self.get_main_menu_keyboard())
                 return
 
             text = "📊 آمار عادت‌های شما:\n\n"
@@ -89,7 +108,7 @@ class BotHandlers:
                 text += f"🔥 استریک فعلی: {stats['current_streak']} روز\n"
                 text += f"🏆 بهترین استریک: {stats['best_streak']} روز\n\n"
 
-            await message.reply(text)
+            await message.reply(text, components=self.get_main_menu_keyboard())
         except Exception as e:
             print(f"❌ خطا در stats_handler: {e}")
         finally:
@@ -104,7 +123,7 @@ class BotHandlers:
             ).all()
 
             if not habits:
-                await message.reply("❌ شما هیچ عادت فعالی ندارید.")
+                await message.reply("❌ شما هیچ عادت فعالی ندارید.", components=self.get_main_menu_keyboard())
                 return
 
             for habit in habits:
@@ -130,12 +149,11 @@ class BotHandlers:
                 graph = generate_progress_graph(logs, habit.start_date)
                 text += graph
 
-                # --- نمایش دلایل عدم انجام عادت ---
                 failure_summary = generate_failure_reason_summary(logs)
                 if failure_summary:
                     text += f"\n\n{failure_summary}"
 
-                await message.reply(text)
+                await message.reply(text, components=self.get_main_menu_keyboard())
 
         except Exception as e:
             print(f"❌ خطا در progress_handler: {e}")
@@ -145,7 +163,8 @@ class BotHandlers:
     async def change_time_handler(self, message: Message):
         self.user_states[message.author.user_id] = {'step': 'waiting_for_new_time'}
         await message.reply(
-            "⏰ لطفاً زمان جدید یادآوری را به فرمت HH:MM وارد کنید (مثال: 08:30)"
+            "⏰ لطفاً زمان جدید یادآوری را به فرمت HH:MM وارد کنید (مثال: 08:30)",
+            components=self.get_main_menu_keyboard()
         )
 
     async def change_habit_handler(self, message: Message):
@@ -157,7 +176,7 @@ class BotHandlers:
             ).all()
 
             if not habits:
-                await message.reply("❌ شما هیچ عادت فعالی ندارید.")
+                await message.reply("❌ شما هیچ عادت فعالی ندارید.", components=self.get_main_menu_keyboard())
                 return
 
             if len(habits) == 1:
@@ -194,7 +213,7 @@ class BotHandlers:
                     'step': 'select_habit_to_change',
                     'habits': [h.id for h in habits]
                 }
-                await message.reply(text)
+                await message.reply(text, components=self.get_main_menu_keyboard())
         except Exception as e:
             print(f"❌ خطا در change_habit_handler: {e}")
         finally:
@@ -202,7 +221,7 @@ class BotHandlers:
 
     async def motivation_handler(self, message: Message):
         quote = Messages.get_random_motivation()
-        await message.reply(f"💪 {quote}")
+        await message.reply(f"💪 {quote}", components=self.get_main_menu_keyboard())
 
     async def text_message_handler(self, message: Message):
         user_id = message.author.user_id
@@ -220,13 +239,14 @@ class BotHandlers:
             if state['step'] == 'waiting_for_habit':
                 state['habit_name'] = message.text.strip()
                 state['step'] = 'waiting_for_time'
-                await message.reply(Messages.GET_REMINDER_TIME)
+                await message.reply(Messages.GET_REMINDER_TIME, components=self.get_main_menu_keyboard())
 
             elif state['step'] == 'waiting_for_time':
                 reminder_time = parse_time(message.text)
                 if not reminder_time:
                     await message.reply(
-                        "❌ فرمت زمان نادرست است. لطفاً به فرمت HH:MM وارد کنید (مثال: 08:30)"
+                        "❌ فرمت زمان نادرست است. لطفاً به فرمت HH:MM وارد کنید (مثال: 08:30)",
+                        components=self.get_main_menu_keyboard()
                     )
                     return
 
@@ -246,17 +266,21 @@ class BotHandlers:
                 session.add(new_habit)
                 session.commit()
 
-                await message.reply(Messages.HABIT_CONFIRMED.format(
-                    habit_name=state['habit_name'],
-                    reminder_time=reminder_time.strftime('%H:%M')
-                ))
+                await message.reply(
+                    Messages.HABIT_CONFIRMED.format(
+                        habit_name=state['habit_name'],
+                        reminder_time=reminder_time.strftime('%H:%M')
+                    ),
+                    components=self.get_main_menu_keyboard()
+                )
                 del self.user_states[user_id]
 
             elif state['step'] == 'waiting_for_new_time':
                 new_time = parse_time(message.text)
                 if not new_time:
                     await message.reply(
-                        "❌ فرمت زمان نادرست است. لطفاً به فرمت HH:MM وارد کنید (مثال: 08:30)"
+                        "❌ فرمت زمان نادرست است. لطفاً به فرمت HH:MM وارد کنید (مثال: 08:30)",
+                        components=self.get_main_menu_keyboard()
                     )
                     return
 
@@ -268,7 +292,10 @@ class BotHandlers:
                     habit.reminder_time = new_time
 
                 session.commit()
-                await message.reply(f"✅ زمان یادآوری به {new_time.strftime('%H:%M')} تغییر یافت.")
+                await message.reply(
+                    f"✅ زمان یادآوری به {new_time.strftime('%H:%M')} تغییر یافت.",
+                    components=self.get_main_menu_keyboard()
+                )
                 del self.user_states[user_id]
 
             elif state['step'] == 'select_habit_to_change':
@@ -304,9 +331,9 @@ class BotHandlers:
                             components=keyboard
                         )
                     else:
-                        await message.reply("❌ شماره نامعتبر است.")
+                        await message.reply("❌ شماره نامعتبر است.", components=self.get_main_menu_keyboard())
                 except ValueError:
-                    await message.reply("❌ لطفاً یک عدد وارد کنید.")
+                    await message.reply("❌ لطفاً یک عدد وارد کنید.", components=self.get_main_menu_keyboard())
 
         except Exception as e:
             print(f"❌ خطا در text_message_handler: {e}")
@@ -318,7 +345,6 @@ class BotHandlers:
         try:
             keyboard = InlineKeyboardMarkup()
 
-            # دکمه‌ها را دو‌تا دوتا در هر ردیف قرار می‌دهیم
             reason_items = list(Messages.FAILURE_REASONS.items())
             for i, (reason_key, reason_label) in enumerate(reason_items):
                 row_num = i + 1
@@ -330,7 +356,6 @@ class BotHandlers:
                     row=row_num
                 )
 
-            # دکمه رد کردن
             keyboard.add(
                 InlineKeyboardButton(
                     "⏭️ رد کردن",
@@ -393,7 +418,6 @@ class BotHandlers:
                     await self.bot.send_message(user_id, reply)
 
                 else:
-                    # ابتدا پیام تشویقی ارسال می‌شود
                     consecutive_fails = check_consecutive_fails(habit_id)
                     reply = Messages.get_random_fail()
 
@@ -401,15 +425,10 @@ class BotHandlers:
                         reply += f"\n\n{Messages.MULTIPLE_FAIL_WARNING}"
 
                     await self.bot.send_message(user_id, reply)
-
-                    # سپس منوی دلایل نمایش داده می‌شود
                     await self.send_failure_reason_menu(user_id, habit_id)
 
             elif data.startswith("reason_"):
-                # پردازش انتخاب دلیل عدم انجام عادت
-                # فرمت: reason_{habit_id}_{reason_key}
                 parts = data.split("_", 2)
-                # parts[0] = "reason", parts[1] = habit_id, parts[2] = reason_key
                 if len(parts) < 3:
                     return
 
@@ -417,14 +436,12 @@ class BotHandlers:
                 reason_key = parts[2]
 
                 if reason_key == "skip":
-                    # کاربر رد کرد — بدون ذخیره دلیل
                     await self.bot.send_message(
                         user_id,
                         "باشه! فردا دوباره تلاش کن 💪"
                     )
                     return
 
-                # ذخیره دلیل در لاگ امروز
                 log = session.query(DailyLog).filter(
                     DailyLog.habit_id == habit_id,
                     DailyLog.log_date == date.today()
@@ -434,7 +451,6 @@ class BotHandlers:
                     log.failure_reason = reason_key
                     session.commit()
 
-                # ارسال پاسخ تصادفی مرتبط با دلیل انتخاب‌شده
                 responses = Messages.FAILURE_REASON_RESPONSES.get(reason_key, [])
                 if responses:
                     reply = random.choice(responses)
@@ -458,18 +474,24 @@ class BotHandlers:
                     session.commit()
                     await self.bot.send_message(
                         user_id,
-                        Messages.habit_toggled(habit.habit_name, False)
+                        Messages.habit_toggled(habit.habit_name, False),
+                        components=self.get_main_menu_keyboard()
                     )
                     await self.bot.send_message(
                         user_id,
-                        "✅ حالا می‌تونید با دستور /addhabit عادت جدیدتون رو شروع کنید."
+                        "✅ حالا می‌تونید با دستور /addhabit عادت جدیدتون رو شروع کنید.",
+                        components=self.get_main_menu_keyboard()
                     )
 
                 if user_id in self.user_states:
                     del self.user_states[user_id]
 
             elif data == "cancel_change":
-                await self.bot.send_message(user_id, "❌ عملیات لغو شد.")
+                await self.bot.send_message(
+                    user_id,
+                    "❌ عملیات لغو شد.",
+                    components=self.get_main_menu_keyboard()
+                )
                 if user_id in self.user_states:
                     del self.user_states[user_id]
 
@@ -493,7 +515,6 @@ def generate_failure_reason_summary(logs) -> str:
     if not reason_counts:
         return ""
 
-    # مرتب‌سازی بر اساس تعداد (از بیشترین به کمترین)
     sorted_reasons = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)
 
     summary = "📋 دلایل عدم انجام عادت:\n"

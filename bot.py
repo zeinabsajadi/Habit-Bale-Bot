@@ -35,23 +35,23 @@ async def on_message(message: Message):
     if not text:
         return
 
-    if text == "/start":
+    if text == "/start" or text == "🏠 صفحه اصلی":
         await handlers.start_handler(message)
-    elif text == "/help":
+    elif text == "/help" or text == "❓ راهنما":
         await handlers.help_handler(message)
-    elif text == "/addhabit":
+    elif text == "/addhabit" or text == "➕ افزودن عادت":
         await handlers.addhabit_handler(message)
-    elif text == "/myhabits":
+    elif text == "/myhabits" or text == "📋 عادت‌های من":
         await handlers.myhabits_handler(message)
-    elif text == "/stats":
+    elif text == "/stats" or text == "📊 آمار":
         await handlers.stats_handler(message)
-    elif text == "/progress":
+    elif text == "/progress" or text == "📈 پیشرفت":
         await handlers.progress_handler(message)
-    elif text == "/change_time":
+    elif text == "/change_time" or text == "⏰ تغییر زمان":
         await handlers.change_time_handler(message)
-    elif text == "/change_habit":
+    elif text == "/change_habit" or text == "🔄 تغییر عادت":
         await handlers.change_habit_handler(message)
-    elif text == "/motivation":
+    elif text == "/motivation" or text == "💪 انگیزه":
         await handlers.motivation_handler(message)
     else:
         await handlers.text_message_handler(message)
