@@ -1,20 +1,22 @@
 # config.py
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
-
 class Config:
-    # Bale Bot Token
-    BOT_TOKEN = os.getenv('BALE_BOT_TOKEN')
+    # توکن ربات
+    BOT_TOKEN = os.getenv('BALE_BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
     
-    # Database
-    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///habit_bot.db')
+    # تنظیمات پایگاه داده
+    DATABASE_URL = 'sqlite:///habit_tracker.db'
     
-    # Settings
-    HABIT_DURATION_DAYS = 40
-    REMINDER_RETRY_HOURS = 2
-    DEFAULT_TIMEZONE = 'Asia/Tehran'
+    # تنظیمات زمان
+    TIMEZONE = 'Asia/Tehran'
     
-    # Streak milestones
+    # نقاط عطف استریک
     STREAK_MILESTONES = [3, 7, 14, 21, 30, 40]
+    
+    # تعداد روزهای هدف
+    TARGET_DAYS = 40
+    
+    # آستانه هشدار شکست متوالی
+    CONSECUTIVE_FAIL_THRESHOLD = 3

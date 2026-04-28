@@ -37,7 +37,7 @@ class Messages:
     ]
 
     STREAK_MESSAGES = {
-        3: "وای! 🎊 سه روز پشت سر هم! داری یه ریتم خوب می‌گیری!",
+        3: "ایول! 🎊 سه روز پشت سر هم! داری یه ریتم خوب می‌گیری!",
         7: "یه هفته تموم! 🔥 این دیگه جدیه! استریکت داره آتیش میگیره!",
         14: "دو هفته! 💎 داری افسانه‌ای میشی! نصف راه رو رد کردی!",
         21: "۲۱ روز! 🏆 می‌دونستی که ۲۱ روز زمان لازم برای شکل‌گیری یه عادت ساده‌ست؟ تو الان توش هستی!",
@@ -81,8 +81,16 @@ class Messages:
 🏆 بهترین استریک: {best_streak} روز
 
 """
+    GET_HABIT_NAME = """اسم عادتی که می‌خوای اضافه کنی رو بنویس:
+(مثلاً: ورزش صبحگاهی، مطالعه ۳۰ دقیقه، مدیتیشن)
+"""
 
-    HELP_MESSAGE = """📚 راهنمای استفاده:
+    GET_REMINDER_TIME = """چه ساعتی می‌خوای یادآوری بگیری؟
+لطفاً به این فرمت بنویس: HH:MM
+مثلاً: 08:30 یا 20:00
+"""
+
+    HELP = """📚 راهنمای استفاده:
 
 /start - شروع و ثبت عادت جدید
 /progress - نمایش پیشرفت و آمار
@@ -92,6 +100,18 @@ class Messages:
 /help - نمایش این راهنما
 
 هر روز در زمان تعیین شده، ازت می‌پرسم که عادتت رو انجام دادی یا نه. فقط کافیه روی دکمه مناسب کلیک کنی! 💪"""
+
+    
+    
+    
+    INVALID_TIME_FORMAT = "❌ فرمت زمان اشتباهه! لطفاً به فرمت HH:MM بنویس (مثلاً 09:30)"
+    
+    NO_HABITS = """هنوز هیچ عادتی اضافه نکردی!
+با /start یه عادت جدید اضافه کن."""
+
+    HABIT_COMPLETED = "✅ عالیه! ثبت شد."
+    
+    HABIT_NOT_COMPLETED = "باشه، مهم نیست! فردا دوباره تلاش کن 💪"
 
     @staticmethod
     def get_random_success():
@@ -104,3 +124,12 @@ class Messages:
     @staticmethod
     def get_random_motivation():
         return random.choice(Messages.MOTIVATION_QUOTES)
+    
+    @staticmethod
+    def habit_deleted(habit_name):
+        return f"🗑 عادت '{habit_name}' حذف شد."
+    
+    @staticmethod
+    def habit_toggled(habit_name, is_active):
+        status = "فعال" if is_active else "غیرفعال"
+        return f"عادت '{habit_name}' الان {status} شد."

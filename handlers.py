@@ -1,279 +1,399 @@
 # handlers.py
-from bale import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from bale import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import get_session, User, Habit, DailyLog
 from messages import Messages
-from utils import get_habit_stats, generate_progress_graph, parse_time, check_consecutive_fails
+from utils import parse_time, get_habit_stats, check_consecutive_fails, generate_progress_graph
 from datetime import date, datetime
 from config import Config
+
 
 class BotHandlers:
     def __init__(self, bot):
         self.bot = bot
-        self.user_states = {}  # ذخیره وضعیت کاربران
-    
+        self.user_states = {}
+
     async def start_handler(self, message: Message):
-        """هندلر دستور /start"""
-        user_id = message.author.user_id
         session = get_session()
-        
         try:
-            user = session.query(User).filter(User.user_id == user_id).first()
+            user = session.query(User).filter(
+                User.user_id == message.author.user_id
+            ).first()
             if not user:
-                user = User(
-                    user_id=user_id,
-                    username=message.author.username
-                )
+                user = User(user_id=message.author.user_id)
                 session.add(user)
                 session.commit()
-            
+
+            self.user_states[message.author.user_id] = {'step': 'waiting_for_habit'}
             await message.reply(Messages.WELCOME)
-            self.user_states[user_id] = {'state': 'waiting_habit_name'}
-        finally:
-            session.close()
-    
-    async def help_handler(self, message: Message):
-        """هندلر دستور /help"""
-        await message.reply(Messages.HELP_MESSAGE)
-    
-    async def progress_handler(self, message: Message):
-        """هندلر دستور /progress"""
-        user_id = message.author.user_id
-        session = get_session()
-        
-        try:
-            habit = session.query(Habit).filter(
-                Habit.user_id == user_id,
-                Habit.is_active == True
-            ).first()
-            
-            if not habit:
-                await message.reply("هنوز عادتی ثبت نکردی! با /start شروع کن 🚀")
-                return
-            
-            stats = get_habit_stats(habit.id)
-            if not stats:
-                await message.reply("مشکلی پیش اومد! دوباره تلاش کن.")
-                return
-            
-            progress_text = Messages.PROGRESS_HEADER.format(**stats)
-            progress_graph = generate_progress_graph(stats['logs'], stats['start_date'])
-            
-            await message.reply(progress_text + progress_graph)
-        finally:
-            session.close()
-    
-    async def motivation_handler(self, message: Message):
-        """هندلر دستور /motivation"""
-        motivation = Messages.get_random_motivation()
-        await message.reply(motivation)
-    
-    async def change_time_handler(self, message: Message):
-        """هندلر دستور /change_time"""
-        user_id = message.author.user_id
-        self.user_states[user_id] = {'state': 'waiting_new_time'}
-        await message.reply("زمان جدید یادآوری رو بنویس (مثلاً: 08:30):")
-    
-    async def change_habit_handler(self, message: Message):
-        """هندلر دستور /change_habit"""
-        user_id = message.author.user_id
-        session = get_session()
-        
-        try:
-            habit = session.query(Habit).filter(
-                Habit.user_id == user_id,
-                Habit.is_active == True
-            ).first()
-            
-            if habit:
-                await message.reply(
-                    "⚠️ توجه: اگر عادت جدید شروع کنی، پیشرفت فعلیت از دست میره.\n\n"
-                    "مطمئنی می‌خوای ادامه بدی؟",
-                    components=InlineKeyboardMarkup([
-                        [
-                            InlineKeyboardButton("آره، مطمئنم", callback_data="confirm_change_habit"),
-                            InlineKeyboardButton("نه، بیخیال", callback_data="cancel_change_habit")
-                        ]
-                    ])
-                )
-            else:
-                await self.start_handler(message)
-        finally:
-            session.close()
-    
-    async def message_handler(self, message: Message):
-        """هندلر پیام‌های متنی"""
-        user_id = message.author.user_id
-        text = message.text
-        
-        if user_id not in self.user_states:
-            await message.reply("لطفاً با /start شروع کن یا از /help برای راهنمایی استفاده کن.")
-            return
-        
-        state = self.user_states[user_id].get('state')
-        
-        if state == 'waiting_habit_name':
-            await self.handle_habit_name(message, text)
-        elif state == 'waiting_time':
-            await self.handle_time(message, text)
-        elif state == 'waiting_new_time':
-            await self.handle_new_time(message, text)
-    
-    async def handle_habit_name(self, message: Message, habit_name: str):
-        """پردازش نام عادت"""
-        user_id = message.author.user_id
-        self.user_states[user_id] = {
-            'state': 'waiting_time',
-            'habit_name': habit_name
-        }
-        await message.reply(Messages.HABIT_RECEIVED.format(habit_name=habit_name))
-    
-    async def handle_time(self, message: Message, time_str: str):
-        """پردازش زمان یادآوری"""
-        user_id = message.author.user_id
-        reminder_time = parse_time(time_str)
-        
-        if not reminder_time:
-            await message.reply("فرمت زمان اشتباهه! لطفاً به این شکل بنویس: HH:MM\nمثلاً: 08:30")
-            return
-        
-        habit_name = self.user_states[user_id].get('habit_name')
-        session = get_session()
-        
-        try:
-            # غیرفعال کردن عادت‌های قبلی
-            old_habits = session.query(Habit).filter(
-                Habit.user_id == user_id,
-                Habit.is_active == True
-            ).all()
-            for old_habit in old_habits:
-                old_habit.is_active = False
-            
-            # ایجاد عادت جدید
-            new_habit = Habit(
-                user_id=user_id,
-                habit_name=habit_name,
-                reminder_time=reminder_time,
-                start_date=date.today()
-            )
-            session.add(new_habit)
-            session.commit()
-            
-            await message.reply(Messages.HABIT_CONFIRMED.format(
-                habit_name=habit_name,
-                reminder_time=reminder_time.strftime("%H:%M")
-            ))
-            
-            del self.user_states[user_id]
-        finally:
-            session.close()
-    
-    async def handle_new_time(self, message: Message, time_str: str):
-        """پردازش تغییر زمان"""
-        user_id = message.author.user_id
-        reminder_time = parse_time(time_str)
-        
-        if not reminder_time:
-            await message.reply("فرمت زمان اشتباهه! لطفاً به این شکل بنویس: HH:MM\nمثلاً: 08:30")
-            return
-        
-        session = get_session()
-        try:
-            habit = session.query(Habit).filter(
-                Habit.user_id == user_id,
-                Habit.is_active == True
-            ).first()
-            
-            if habit:
-                habit.reminder_time = reminder_time
-                session.commit()
-                await message.reply(f"زمان یادآوری به {reminder_time.strftime('%H:%M')} تغییر کرد! ✅")
-            else:
-                await message.reply("عادت فعالی پیدا نشد!")
-            
-            if user_id in self.user_states:
-                del self.user_states[user_id]
-        finally:
-            session.close()
-    
-    async def callback_handler(self, callback: CallbackQuery):
-        """هندلر callback های inline keyboard"""
-        user_id = callback.user.user_id
-        data = callback.data
-        
-        if data.startswith("daily_"):
-            await self.handle_daily_response(callback)
-        elif data == "confirm_change_habit":
-            await self.handle_confirm_change_habit(callback)
-        elif data == "cancel_change_habit":
-            await callback.message.reply("باشه، ادامه میدیم! 💪")
-    
-    async def handle_daily_response(self, callback: CallbackQuery):
-        """پردازش پاسخ روزانه"""
-        user_id = callback.user.user_id
-        data = callback.data
-        habit_id = int(data.split("_")[1])
-        completed = data.split("_")[2] == "yes"
-        
-        session = get_session()
-        try:
-            log = session.query(DailyLog).filter(
-                DailyLog.habit_id == habit_id,
-                DailyLog.log_date == date.today()
-            ).first()
-            
-            if log:
-                log.completed = completed
-                log.responded_at = datetime.now()
-            else:
-                log = DailyLog(
-                    habit_id=habit_id,
-                    log_date=date.today(),
-                    completed=completed,
-                    responded_at=datetime.now()
-                )
-                session.add(log)
-            
-            session.commit()
-            
-            if completed:
-                response = Messages.get_random_success()
-                
-                # بررسی استریک
-                current_streak, _ = calculate_streak(habit_id)
-                if current_streak in Config.STREAK_MILESTONES:
-                    response += "\n\n" + Messages.STREAK_MESSAGES[current_streak]
-            else:
-                response = Messages.get_random_fail()
-                
-                # بررسی شکست‌های متوالی
-                if check_consecutive_fails(habit_id, 3):
-                    response += "\n\n" + Messages.MULTIPLE_FAIL_WARNING
-            
-            await callback.message.reply(response)
-        finally:
-            session.close()
-    
-    async def handle_confirm_change_habit(self, callback: CallbackQuery):
-        """تایید تغییر عادت"""
-        user_id = callback.user.user_id
-        session = get_session()
-        
-        try:
-            habit = session.query(Habit).filter(
-                Habit.user_id == user_id,
-                Habit.is_active == True
-            ).first()
-            
-            if habit:
-                habit.is_active = False
-                session.commit()
-            
-            await callback.message.reply(Messages.WELCOME)
-            self.user_states[user_id] = {'state': 'waiting_habit_name'}
+        except Exception as e:
+            print(f"❌ خطا در start_handler: {e}")
         finally:
             session.close()
 
-def calculate_streak(habit_id):
-    """محاسبه استریک (تابع کمکی برای handlers)"""
-    from utils import calculate_streak as calc_streak
-    return calc_streak(habit_id)
+    async def help_handler(self, message: Message):
+        await message.reply(Messages.HELP)
+
+    async def addhabit_handler(self, message: Message):
+        self.user_states[message.author.user_id] = {'step': 'waiting_for_habit'}
+        await message.reply(Messages.GET_HABIT_NAME)
+
+    async def myhabits_handler(self, message: Message):
+        session = get_session()
+        try:
+            habits = session.query(Habit).filter(
+                Habit.user_id == message.author.user_id,
+                Habit.is_active == True
+            ).all()
+
+            if not habits:
+                await message.reply(
+                    "❌ شما هیچ عادت فعالی ندارید.\n\n"
+                    "برای اضافه کردن عادت جدید از دستور /addhabit استفاده کنید."
+                )
+                return
+
+            text = "📋 عادت‌های فعال شما:\n\n"
+            for i, habit in enumerate(habits, 1):
+                text += f"{i}. {habit.habit_name}\n"
+                text += f"   ⏰ زمان یادآوری: {habit.reminder_time.strftime('%H:%M')}\n"
+                text += f"   📅 تاریخ شروع: {habit.start_date.strftime('%Y/%m/%d')}\n\n"
+
+            await message.reply(text)
+        except Exception as e:
+            print(f"❌ خطا در myhabits_handler: {e}")
+        finally:
+            session.close()
+
+    async def stats_handler(self, message: Message):
+        session = get_session()
+        try:
+            habits = session.query(Habit).filter(
+                Habit.user_id == message.author.user_id,
+                Habit.is_active == True
+            ).all()
+
+            if not habits:
+                await message.reply("❌ شما هیچ عادت فعالی ندارید.")
+                return
+
+            text = "📊 آمار عادت‌های شما:\n\n"
+            for habit in habits:
+                stats = get_habit_stats(habit.id)
+                if not stats:
+                    continue
+                text += f"🎯 {habit.habit_name}\n"
+                text += f"✅ روزهای موفق: {stats['success_count']}\n"
+                text += f"❌ روزهای ناموفق: {stats['fail_count']}\n"
+                text += f"⏸️ بدون پاسخ: {stats['no_response_count']}\n"
+                text += f"📈 درصد موفقیت: {stats['success_rate']}%\n"
+                text += f"🔥 استریک فعلی: {stats['current_streak']} روز\n"
+                text += f"🏆 بهترین استریک: {stats['best_streak']} روز\n\n"
+
+            await message.reply(text)
+        except Exception as e:
+            print(f"❌ خطا در stats_handler: {e}")
+        finally:
+            session.close()
+
+    async def progress_handler(self, message: Message):
+        session = get_session()
+        try:
+            habits = session.query(Habit).filter(
+                Habit.user_id == message.author.user_id,
+                Habit.is_active == True
+            ).all()
+
+            if not habits:
+                await message.reply("❌ شما هیچ عادت فعالی ندارید.")
+                return
+
+            for habit in habits:
+                stats = get_habit_stats(habit.id)
+                if not stats:
+                    continue
+
+                text = Messages.PROGRESS_HEADER.format(
+                    habit_name=habit.habit_name,
+                    current_day=stats['current_day'],
+                    success_count=stats['success_count'],
+                    fail_count=stats['fail_count'],
+                    no_response_count=stats['no_response_count'],
+                    success_rate=stats['success_rate'],
+                    current_streak=stats['current_streak'],
+                    best_streak=stats['best_streak']
+                )
+
+                logs = session.query(DailyLog).filter(
+                    DailyLog.habit_id == habit.id
+                ).order_by(DailyLog.log_date).all()
+
+                graph = generate_progress_graph(logs, habit.start_date)
+                text += graph
+
+                await message.reply(text)
+
+        except Exception as e:
+            print(f"❌ خطا در progress_handler: {e}")
+        finally:
+            session.close()
+
+    async def change_time_handler(self, message: Message):
+        self.user_states[message.author.user_id] = {'step': 'waiting_for_new_time'}
+        await message.reply(
+            "⏰ لطفاً زمان جدید یادآوری را به فرمت HH:MM وارد کنید (مثال: 08:30)"
+        )
+
+    async def change_habit_handler(self, message: Message):
+        session = get_session()
+        try:
+            habits = session.query(Habit).filter(
+                Habit.user_id == message.author.user_id,
+                Habit.is_active == True
+            ).all()
+
+            if not habits:
+                await message.reply("❌ شما هیچ عادت فعالی ندارید.")
+                return
+
+            if len(habits) == 1:
+                self.user_states[message.author.user_id] = {
+                    'step': 'confirm_change_habit',
+                    'old_habit_id': habits[0].id
+                }
+
+                keyboard = InlineKeyboardMarkup()
+                keyboard.add(
+                    InlineKeyboardButton(
+                        "✅ بله، مطمئنم",
+                        callback_data=f"confirm_change_{habits[0].id}"
+                    ),
+                    row=1
+                )
+                keyboard.add(
+                    InlineKeyboardButton("❌ انصراف", callback_data="cancel_change"),
+                    row=2
+                )
+
+                await message.reply(
+                    f"⚠️ شما در حال حاضر روی عادت «{habits[0].habit_name}» کار می‌کنید.\n\n"
+                    "آیا مطمئن هستید که می‌خواهید این عادت را غیرفعال کرده و عادت جدیدی شروع کنید؟",
+                    components=keyboard
+                )
+            else:
+                text = "📋 عادت‌های فعال شما:\n\n"
+                for i, habit in enumerate(habits, 1):
+                    text += f"{i}. {habit.habit_name}\n"
+                text += "\n🔢 شماره عادتی که می‌خواهید غیرفعال کنید را وارد کنید:"
+
+                self.user_states[message.author.user_id] = {
+                    'step': 'select_habit_to_change',
+                    'habits': [h.id for h in habits]
+                }
+                await message.reply(text)
+        except Exception as e:
+            print(f"❌ خطا در change_habit_handler: {e}")
+        finally:
+            session.close()
+
+    async def motivation_handler(self, message: Message):
+        quote = Messages.get_random_motivation()
+        await message.reply(f"💪 {quote}")
+
+    async def text_message_handler(self, message: Message):
+        user_id = message.author.user_id
+
+        if not message.text:
+            return
+
+        if user_id not in self.user_states:
+            return
+
+        state = self.user_states[user_id]
+        session = get_session()
+
+        try:
+            if state['step'] == 'waiting_for_habit':
+                state['habit_name'] = message.text.strip()
+                state['step'] = 'waiting_for_time'
+                await message.reply(Messages.GET_REMINDER_TIME)
+
+            elif state['step'] == 'waiting_for_time':
+                reminder_time = parse_time(message.text)
+                if not reminder_time:
+                    await message.reply(
+                        "❌ فرمت زمان نادرست است. لطفاً به فرمت HH:MM وارد کنید (مثال: 08:30)"
+                    )
+                    return
+
+                # غیرفعال کردن عادت‌های قبلی
+                old_habits = session.query(Habit).filter(
+                    Habit.user_id == user_id,
+                    Habit.is_active == True
+                ).all()
+                for old_habit in old_habits:
+                    old_habit.is_active = False
+
+                new_habit = Habit(
+                    user_id=user_id,
+                    habit_name=state['habit_name'],
+                    reminder_time=reminder_time,
+                    start_date=date.today()
+                )
+                session.add(new_habit)
+                session.commit()
+
+                await message.reply(Messages.HABIT_CONFIRMED.format(
+                    habit_name=state['habit_name'],
+                    reminder_time=reminder_time.strftime('%H:%M')
+                ))
+                del self.user_states[user_id]
+
+            elif state['step'] == 'waiting_for_new_time':
+                new_time = parse_time(message.text)
+                if not new_time:
+                    await message.reply(
+                        "❌ فرمت زمان نادرست است. لطفاً به فرمت HH:MM وارد کنید (مثال: 08:30)"
+                    )
+                    return
+
+                habits = session.query(Habit).filter(
+                    Habit.user_id == user_id,
+                    Habit.is_active == True
+                ).all()
+                for habit in habits:
+                    habit.reminder_time = new_time
+
+                session.commit()
+                await message.reply(f"✅ زمان یادآوری به {new_time.strftime('%H:%M')} تغییر یافت.")
+                del self.user_states[user_id]
+
+            elif state['step'] == 'select_habit_to_change':
+                try:
+                    index = int(message.text.strip()) - 1
+                    if 0 <= index < len(state['habits']):
+                        habit_id = state['habits'][index]
+                        habit = session.query(Habit).filter(
+                            Habit.id == habit_id
+                        ).first()
+
+                        keyboard = InlineKeyboardMarkup()
+                        keyboard.add(
+                            InlineKeyboardButton(
+                                "✅ بله، مطمئنم",
+                                callback_data=f"confirm_change_{habit_id}"
+                            ),
+                            row=1
+                        )
+                        keyboard.add(
+                            InlineKeyboardButton(
+                                "❌ انصراف",
+                                callback_data="cancel_change"
+                            ),
+                            row=2
+                        )
+
+                        state['step'] = 'confirm_change_habit'
+                        state['old_habit_id'] = habit_id
+
+                        await message.reply(
+                            f"⚠️ آیا مطمئن هستید که می‌خواهید عادت «{habit.habit_name}» را غیرفعال کنید؟",
+                            components=keyboard
+                        )
+                    else:
+                        await message.reply("❌ شماره نامعتبر است.")
+                except ValueError:
+                    await message.reply("❌ لطفاً یک عدد وارد کنید.")
+
+        except Exception as e:
+            print(f"❌ خطا در text_message_handler: {e}")
+        finally:
+            session.close()
+
+    async def callback_handler(self, callback: CallbackQuery):
+        data = callback.data
+        # در کتابخانه bale، CallbackQuery فاقد متد answer() است
+        # شناسه کاربر از طریق callback.author.user_id یا callback.user.user_id خوانده می‌شود
+        try:
+            user_id = callback.author.user_id
+        except AttributeError:
+            try:
+                user_id = callback.user.user_id
+            except AttributeError:
+                print("❌ خطا در callback_handler: نمی‌توان user_id را استخراج کرد")
+                return
+
+        session = get_session()
+
+        try:
+            if data.startswith("daily_"):
+                parts = data.split("_")
+                habit_id = int(parts[1])
+                response = parts[2]
+
+                log = session.query(DailyLog).filter(
+                    DailyLog.habit_id == habit_id,
+                    DailyLog.log_date == date.today()
+                ).first()
+
+                if not log:
+                    await self.bot.send_message(user_id, "❌ لاگ امروز یافت نشد.")
+                    return
+
+                # اگر قبلاً پاسخ داده شده
+                if log.completed is not None:
+                    await self.bot.send_message(user_id, "✅ قبلاً پاسخ این روز رو ثبت کردی.")
+                    return
+
+                log.completed = (response == "yes")
+                log.responded_at = datetime.now()
+                session.commit()
+
+                if response == "yes":
+                    stats = get_habit_stats(habit_id)
+                    reply = Messages.get_random_success()
+
+                    if stats and stats['current_streak'] in Messages.STREAK_MESSAGES:
+                        reply += f"\n\n{Messages.STREAK_MESSAGES[stats['current_streak']]}"
+
+                    await self.bot.send_message(user_id, reply)
+
+                else:
+                    consecutive_fails = check_consecutive_fails(habit_id)
+                    reply = Messages.get_random_fail()
+
+                    if consecutive_fails:
+                        reply += f"\n\n{Messages.MULTIPLE_FAIL_WARNING}"
+
+                    await self.bot.send_message(user_id, reply)
+
+            elif data.startswith("confirm_change_"):
+                habit_id = int(data.replace("confirm_change_", ""))
+
+                habit = session.query(Habit).filter(
+                    Habit.id == habit_id
+                ).first()
+
+                if habit:
+                    habit.is_active = False
+                    session.commit()
+                    await self.bot.send_message(
+                        user_id,
+                        Messages.habit_toggled(habit.habit_name, False)
+                    )
+                    await self.bot.send_message(
+                        user_id,
+                        "✅ حالا می‌تونید با دستور /addhabit عادت جدیدتون رو شروع کنید."
+                    )
+
+                if user_id in self.user_states:
+                    del self.user_states[user_id]
+
+            elif data == "cancel_change":
+                await self.bot.send_message(user_id, "❌ عملیات لغو شد.")
+                if user_id in self.user_states:
+                    del self.user_states[user_id]
+
+        except Exception as e:
+            print(f"❌ خطا در callback_handler: {e}")
+        finally:
+            session.close()

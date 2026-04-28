@@ -1,28 +1,26 @@
 # scheduler.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+from datetime import datetime, date
 from database import get_session, Habit, DailyLog
 from messages import Messages
-from datetime import date, datetime, timedelta
 from bale import InlineKeyboardMarkup, InlineKeyboardButton
+from config import Config
 import pytz
+
 
 class ReminderScheduler:
     def __init__(self, bot):
         self.bot = bot
-        self.scheduler = AsyncIOScheduler(timezone=pytz.timezone('Asia/Tehran'))
-    
+        self.scheduler = AsyncIOScheduler(timezone=pytz.timezone(Config.TIMEZONE))
+
     def start(self):
         """شروع scheduler"""
-        # هر دقیقه چک می‌کنه که آیا باید پیام بفرسته
         self.scheduler.add_job(
             self.check_reminders,
             'cron',
             minute='*',
             id='check_reminders'
         )
-        
-        # هر شب ساعت ۲۳:۵۰ لاگ‌های بدون پاسخ رو ثبت می‌کنه
         self.scheduler.add_job(
             self.mark_no_response,
             'cron',
@@ -30,32 +28,31 @@ class ReminderScheduler:
             minute=50,
             id='mark_no_response'
         )
-        
         self.scheduler.start()
-    
+        print("✅ Scheduler شروع به کار کرد")
+
     async def check_reminders(self):
         """بررسی و ارسال یادآوری‌ها"""
         session = get_session()
         try:
-            current_time = datetime.now().time()
-            current_minute = current_time.replace(second=0, microsecond=0)
-            
-            habits = session.query(Habit).filter(Habit.is_active == True).all()
-            
+            tz = pytz.timezone(Config.TIMEZONE)
+            now = datetime.now(tz)
+            current_time = now.time()
+
+            habits = session.query(Habit).filter(
+                Habit.is_active == True
+            ).all()
+
             for habit in habits:
-                habit_time = habit.reminder_time.replace(second=0, microsecond=0)
-                
-                if habit_time == current_minute:
-                    # بررسی که امروز لاگ نداشته باشه
+                if (habit.reminder_time.hour == current_time.hour and
+                        habit.reminder_time.minute == current_time.minute):
+
                     existing_log = session.query(DailyLog).filter(
                         DailyLog.habit_id == habit.id,
                         DailyLog.log_date == date.today()
                     ).first()
-                    
+
                     if not existing_log:
-                        await self.send_daily_reminder(habit)
-                        
-                        # ایجاد لاگ جدید
                         new_log = DailyLog(
                             habit_id=habit.id,
                             log_date=date.today(),
@@ -63,54 +60,67 @@ class ReminderScheduler:
                         )
                         session.add(new_log)
                         session.commit()
+                        await self.send_daily_reminder(habit)
+
+        except Exception as e:
+            print(f"❌ خطا در check_reminders: {e}")
         finally:
             session.close()
-    
+
     async def send_daily_reminder(self, habit):
-        """ارسال پیام یادآوری روزانه"""
+        """ارسال یادآوری روزانه"""
         try:
-            keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "✅ آره، انجام دادم",
-                        callback_data=f"daily_{habit.id}_yes"
-                    ),
-                    InlineKeyboardButton(
-                        "❌ نه، نتونستم",
-                        callback_data=f"daily_{habit.id}_no"
-                    )
-                ]
-            ])
-            
-            message = Messages.daily_reminder(habit.name)
-            
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(
+                InlineKeyboardButton(
+                    "✅ آره، انجام دادم",
+                    callback_data=f"daily_{habit.id}_yes"
+                ),
+                row=1
+            )
+            keyboard.add(
+                InlineKeyboardButton(
+                    "❌ نه، نتونستم",
+                    callback_data=f"daily_{habit.id}_no"
+                ),
+                row=2
+            )
+
+            message_text = Messages.DAILY_REMINDER.format(habit_name=habit.habit_name)
             await self.bot.send_message(
                 habit.user_id,
-                message,
+                message_text,
                 components=keyboard
             )
+            print(f"✅ یادآوری برای habit {habit.id} ارسال شد")
+
         except Exception as e:
-            print(f"خطا در ارسال یادآوری برای عادت {habit.id}: {e}")
-    
+            print(f"❌ خطا در ارسال یادآوری برای habit {habit.id}: {e}")
+
     async def mark_no_response(self):
-        """علامت‌گذاری لاگ‌های بدون پاسخ"""
+        """
+        علامت‌گذاری لاگ‌های بدون پاسخ در پایان روز.
+        لاگ‌هایی که completed=None هستند را به حال خود رها می‌کنیم
+        تا در آمار به عنوان 'no_response' شمرده شوند، نه 'fail'.
+        این تابع صرفاً گزارش تعداد را چاپ می‌کند.
+        """
         session = get_session()
         try:
-            today = date.today()
-            
-            # پیدا کردن لاگ‌هایی که completed=None هستن
             no_response_logs = session.query(DailyLog).filter(
-                DailyLog.log_date == today,
-                DailyLog.completed == None
+                DailyLog.log_date == date.today(),
+                DailyLog.completed == None  # noqa: E711
             ).all()
-            
-            for log in no_response_logs:
-                log.completed = False
-            
-            session.commit()
+
+            count = len(no_response_logs)
+            # این لاگ‌ها را تغییر نمی‌دهیم — None به معنای "بدون پاسخ" باقی می‌ماند
+            print(f"ℹ️ {count} لاگ بدون پاسخ برای امروز ثبت شد")
+
+        except Exception as e:
+            print(f"❌ خطا در mark_no_response: {e}")
         finally:
             session.close()
-    
+
     def stop(self):
         """توقف scheduler"""
         self.scheduler.shutdown()
+        print("⏹️ Scheduler متوقف شد")
