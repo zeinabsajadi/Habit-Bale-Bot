@@ -430,6 +430,8 @@ class BotHandlers:
                         reply += f"\n\n{Messages.STREAK_MESSAGES[stats['current_streak']]}"
 
                     await self.bot.send_message(user_id, reply)
+                    # --- ارسال گیف هوشمند ---
+                    await send_response_gif(self.bot, user_id, user_stats)
 
                 else:
                     consecutive_fails = check_consecutive_fails(habit_id)
@@ -439,10 +441,10 @@ class BotHandlers:
                         reply += f"\n\n{Messages.MULTIPLE_FAIL_WARNING}"
 
                     await self.bot.send_message(user_id, reply)
+                    # --- ارسال گیف هوشمند (قبل از منوی دلیل) ---
+                    await send_response_gif(self.bot, user_id, user_stats)
+                    # --- پرسیدن دلیل عدم انجام (بعد از گیف) ---
                     await self.send_failure_reason_menu(user_id, habit_id)
-
-                # --- ارسال گیف هوشمند (پیام جداگانه بعد از پیام متنی) ---
-                await send_response_gif(self.bot, user_id, user_stats)
 
             elif data.startswith("reason_"):
                 parts = data.split("_", 2)
