@@ -1,8 +1,9 @@
-# handlers.py
 from bale import Bot, Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, MenuKeyboardMarkup, MenuKeyboardButton
 from database import get_session, User, Habit, DailyLog
 from messages import Messages
 from utils import parse_time, get_habit_stats, check_consecutive_fails, generate_progress_graph
+from user_stats import get_user_stats, update_relationship_score, record_comeback_if_needed
+from gif_sender import send_response_gif
 from datetime import date, datetime
 from config import Config
 import random
@@ -26,7 +27,7 @@ class BotHandlers:
         keyboard.add(MenuKeyboardButton("💪 انگیزه"), row=3)
         keyboard.add(MenuKeyboardButton("❓ راهنما"), row=3)
         keyboard.add(MenuKeyboardButton("🏠 صفحه اصلی"), row=4)
-    
+
         return keyboard
 
     async def start_handler(self, message: Message):
@@ -403,11 +404,25 @@ class BotHandlers:
                     await self.bot.send_message(user_id, "✅ قبلاً پاسخ این روز رو ثبت کردی.")
                     return
 
-                log.completed = (response == "yes")
+                did_today = (response == "yes")
+                log.completed = did_today
                 log.responded_at = datetime.now()
                 session.commit()
+                # session را اینجا می‌بندیم تا قبل از عملیات بعدی آزاد باشد
+                session.close()
+                session = None
 
-                if response == "yes":
+                # --- آپدیت امتیاز رابطه ---
+                update_relationship_score(user_id, did_today)
+
+                # --- ثبت comeback در صورت نیاز ---
+                if did_today:
+                    record_comeback_if_needed(user_id, habit_id)
+
+                # --- محاسبه آمار برای انتخاب گیف ---
+                user_stats = get_user_stats(user_id, habit_id)
+
+                if did_today:
                     stats = get_habit_stats(habit_id)
                     reply = Messages.get_random_success()
 
@@ -425,6 +440,9 @@ class BotHandlers:
 
                     await self.bot.send_message(user_id, reply)
                     await self.send_failure_reason_menu(user_id, habit_id)
+
+                # --- ارسال گیف هوشمند (پیام جداگانه بعد از پیام متنی) ---
+                await send_response_gif(self.bot, user_id, user_stats)
 
             elif data.startswith("reason_"):
                 parts = data.split("_", 2)
@@ -497,7 +515,8 @@ class BotHandlers:
         except Exception as e:
             print(f"❌ خطا در callback_handler: {e}")
         finally:
-            session.close()
+            if session is not None:
+                session.close()
 
 
 def generate_failure_reason_summary(logs) -> str:

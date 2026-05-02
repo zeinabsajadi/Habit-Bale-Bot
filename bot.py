@@ -70,3 +70,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n⏹️ ربات متوقف شد")
         scheduler.stop()
+
