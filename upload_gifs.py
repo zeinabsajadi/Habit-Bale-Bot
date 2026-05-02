@@ -1,22 +1,23 @@
 # upload_gifs.py
 import asyncio
-from bale import Bot
+from bale import Bot, InputFile
 
-TOKEN = "YOUR_BOT_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"  # آیدی یه چت که ربات توش ادمینه
-
-bot = Bot(token=TOKEN)
+TOKEN = "636408536:4T6tFFifbOGZ7Y_J6BZEyBg4-I2t6ie8sYw"
+CHAT_ID = 479945362
 
 async def main():
     gifs = {
-        "welcome": "gifs/welcome.gif",
-        "success": "gifs/success.gif",
-        "error":   "gifs/error.gif",
+        "Amirjalali": "gifs/Amirjalali.gif",
     }
-
-    for name, path in gifs.items():
-        with open(path, "rb") as f:
-            msg = await bot.send_animation(chat_id=CHAT_ID, animation=f)
-        print(f'"{name}": "{msg.animation.file_id}",')
+    async with Bot(token=TOKEN) as bot:
+        for name, path in gifs.items():
+            with open(path, "rb") as f:
+                file_bytes = f.read()
+            
+            msg = await bot.send_animation(
+                chat_id=CHAT_ID,
+                animation=InputFile(file_bytes, file_name=f"{name}.gif")
+            )
+            print(f'"{name}": "{msg.animation.file_id}",')
 
 asyncio.run(main())

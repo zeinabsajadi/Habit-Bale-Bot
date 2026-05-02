@@ -8,85 +8,72 @@ gifs.py
 GIFS: dict[str, list[str]] = {
     # موفقیت — برگشتی بعد از غیبت
     "comeback_praise": [
-        "AgACAgQAAxkBAAIBAAFcomeback1AAAA",
-        "AgACAgQAAxkBAAIBAAFcomeback2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # موفقیت — اولین روز / شروع تازه
     "fresh_start": [
-        "AgACAgQAAxkBAAIBAAFfresh1AAAA",
-        "AgACAgQAAxkBAAIBAAFfresh2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
+
     ],
 
     # موفقیت — روزهای ۲ و ۳ (داری می‌سازی)
     "building_momentum": [
-        "AgACAgQAAxkBAAIBAAFmomentum1AAAA",
-        "AgACAgQAAxkBAAIBAAFmomentum2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # موفقیت — روزهای ۴ تا ۶ (آتیشی)
     "on_fire": [
-        "AgACAgQAAxkBAAIBAAFfire1AAAA",
-        "AgACAgQAAxkBAAIBAAFfire2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # موفقیت — مایلستون هفتگی (۷، ۱۴، ۲۱، ...)
     "milestone": [
-        "AgACAgQAAxkBAAIBAAFmilestone1AAAA",
-        "AgACAgQAAxkBAAIBAAFmilestone2AAAA",
+    "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # موفقیت — نگه‌دارنده استریک (بالای ۷ روز)
     "streak_keeper": [
-        "AgACAgQAAxkBAAIBAAFkeeper1AAAA",
-        "AgACAgQAAxkBAAIBAAFkeeper2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # موفقیت — حالت عمومی
     "generic_done": [
-        "AgACAgQAAxkBAAIBAAFdone1AAAA",
-        "AgACAgQAAxkBAAIBAAFdone2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — اولین بار، رابطه خوب
     "gentle_miss": [
-        "AgACAgQAAxkBAAIBAAFgentle1AAAA",
-        "AgACAgQAAxkBAAIBAAFgentle2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — اولین بار، سابقه ضعیف
     "concerned_miss": [
-        "AgACAgQAAxkBAAIBAAFconcerned1AAAA",
-        "AgACAgQAAxkBAAIBAAFconcerned2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — دو روز متوالی
     "two_day_miss": [
-        "AgACAgQAAxkBAAIBAAFtwoday1AAAA",
-        "AgACAgQAAxkBAAIBAAFtwoday2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — سه روز متوالی
     "three_day_miss": [
-        "AgACAgQAAxkBAAIBAAFthreeday1AAAA",
-        "AgACAgQAAxkBAAIBAAFthreeday2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — چهار روز به بالا، رابطه متوسط به بالا
     "disappointed_miss": [
-        "AgACAgQAAxkBAAIBAAFdisappointed1AAAA",
-        "AgACAgQAAxkBAAIBAAFdisappointed2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — چهار روز به بالا، رابطه ضعیف
     "cold_miss": [
-        "AgACAgQAAxkBAAIBAAFcold1AAAA",
-        "AgACAgQAAxkBAAIBAAFcold2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 
     # شکست — حالت عمومی
     "generic_miss": [
-        "AgACAgQAAxkBAAIBAAFmiss1AAAA",
-        "AgACAgQAAxkBAAIBAAFmiss2AAAA",
+        "636408536:4807480978810216193:1:589296889612d79b1352313f910c4355",
     ],
 }

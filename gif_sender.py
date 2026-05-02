@@ -6,6 +6,7 @@ gif_sender.py
 import random
 from user_stats import UserStats
 from gifs import GIFS
+from bale import InputFile  # ✅ اضافه شد
 
 
 def get_response_category(user: UserStats) -> str:
@@ -82,7 +83,7 @@ async def send_response_gif(bot, user_id: int, user_stats: UserStats) -> None:
 
         await bot.send_animation(
             chat_id=user_id,
-            animation=gif_id
+            animation=InputFile(gif_id)  # ✅ اصلاح شد
         )
 
     except Exception as e:
