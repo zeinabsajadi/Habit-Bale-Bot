@@ -34,6 +34,19 @@ async def on_message(message: Message):
     if not text:
         return
 
+    user_id = message.author.user_id
+
+    # ✅ اگر کاربر در یک state خاص است، اولویت با همان flow است
+    if user_id in handlers.user_states:
+        # فقط اجازه خروج با /start یا صفحه اصلی
+        if text == "/start" or text == "🏠 صفحه اصلی":
+            await handlers.start_handler(message)
+            return
+
+        await handlers.text_message_handler(message)
+        return
+
+    # ✅ routing عادی (بدون تغییر)
     if text == "/start" or text == "🏠 صفحه اصلی":
         await handlers.start_handler(message)
     elif text == "/help" or text == "❓ راهنما":
@@ -70,4 +83,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n⏹️ ربات متوقف شد")
         scheduler.stop()
-

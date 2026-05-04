@@ -4,6 +4,8 @@ from messages import Messages
 from utils import parse_time, get_habit_stats, check_consecutive_fails, generate_progress_graph
 from user_stats import get_user_stats, update_relationship_score, record_comeback_if_needed
 from gif_sender import send_response_gif
+# [NEW] Import the new failure reason analyzer module
+from failure_reason_analyzer import analyze_failure_reason, get_failure_prompt_message, is_skip_message
 from datetime import date, datetime
 from config import Config
 import random
@@ -335,42 +337,69 @@ class BotHandlers:
                 except ValueError:
                     await message.reply("❌ لطفاً یک عدد وارد کنید.", components=self.get_main_menu_keyboard())
 
+            # [NEW] Handle free-text failure reason input from user
+            elif state['step'] == 'waiting_for_failure_reason':
+                habit_id = state['habit_id']
+                user_text = (message.text or "").strip()
+
+                # empty input guard
+                if not user_text:
+                    await message.reply("یه توضیح کوتاه بنویس 🙂")
+                    return
+
+                # skip handling
+                if is_skip_message(user_text):
+                    await message.reply("باشه! فردا دوباره تلاش کن 💪")
+                    del self.user_states[user_id]
+                    return
+
+                # analyze (sync → بدون await)
+                rule_id, response_text = analyze_failure_reason(user_text)
+
+                # fetch today's log
+                log = session.query(DailyLog).filter(
+                    DailyLog.habit_id == habit_id,
+                    DailyLog.log_date == date.today()
+                ).first()
+
+                # safety guard (race condition / invalid state)
+                if not log or log.completed is not False:
+                    del self.user_states[user_id]
+                    return
+
+                # persist reason
+                log.failure_reason = rule_id
+                session.commit()
+
+                # respond to user
+                await message.reply(response_text)
+
+                # clear state
+                del self.user_states[user_id]
+
         except Exception as e:
             print(f"❌ خطا در text_message_handler: {e}")
         finally:
             session.close()
 
-    async def send_failure_reason_menu(self, user_id: int, habit_id: int):
-        """ارسال منوی دلایل عدم انجام عادت"""
+    # [REMOVED] send_failure_reason_menu — inline keyboard approach has been fully removed.
+    # It has been replaced by the text-based flow via _prompt_for_failure_reason below.
+
+    # [NEW] Helper: prompt user to describe their failure reason in free text
+    async def _prompt_for_failure_reason(self, user_id: int, habit_id: int):
+        """
+        ارسال پیام درخواست دلیل عدم انجام به صورت متن آزاد (بدون دکمه).
+        وضعیت کاربر را به 'waiting_for_failure_reason' تنظیم می‌کند.
+        """
         try:
-            keyboard = InlineKeyboardMarkup()
-
-            reason_items = list(Messages.FAILURE_REASONS.items())
-            for i, (reason_key, reason_label) in enumerate(reason_items):
-                row_num = i + 1
-                keyboard.add(
-                    InlineKeyboardButton(
-                        reason_label,
-                        callback_data=f"reason_{habit_id}_{reason_key}"
-                    ),
-                    row=row_num
-                )
-
-            keyboard.add(
-                InlineKeyboardButton(
-                    "⏭️ رد کردن",
-                    callback_data=f"reason_{habit_id}_skip"
-                ),
-                row=len(reason_items) + 1
-            )
-
-            await self.bot.send_message(
-                user_id,
-                Messages.SELECT_FAILURE_REASON,
-                components=keyboard
-            )
+            prompt_message = get_failure_prompt_message()
+            self.user_states[user_id] = {
+                'step': 'waiting_for_failure_reason',
+                'habit_id': habit_id
+            }
+            await self.bot.send_message(user_id, prompt_message)
         except Exception as e:
-            print(f"❌ خطا در send_failure_reason_menu: {e}")
+            print(f"❌ خطا در _prompt_for_failure_reason: {e}")
 
     async def callback_handler(self, callback: CallbackQuery):
         data = callback.data
@@ -441,45 +470,16 @@ class BotHandlers:
                         reply += f"\n\n{Messages.MULTIPLE_FAIL_WARNING}"
 
                     await self.bot.send_message(user_id, reply)
-                    # --- ارسال گیف هوشمند (قبل از منوی دلیل) ---
+                    # --- ارسال گیف هوشمند ---
                     await send_response_gif(self.bot, user_id, user_stats)
-                    # --- پرسیدن دلیل عدم انجام (بعد از گیف) ---
-                    await self.send_failure_reason_menu(user_id, habit_id)
 
-            elif data.startswith("reason_"):
-                parts = data.split("_", 2)
-                if len(parts) < 3:
-                    return
+                    # [NEW] Replace inline keyboard with free-text prompt for failure reason
+                    # [REMOVED] await self.send_failure_reason_menu(user_id, habit_id)
+                    await self._prompt_for_failure_reason(user_id, habit_id)
 
-                habit_id = int(parts[1])
-                reason_key = parts[2]
-
-                if reason_key == "skip":
-                    await self.bot.send_message(
-                        user_id,
-                        "باشه! فردا دوباره تلاش کن 💪"
-                    )
-                    return
-
-                log = session.query(DailyLog).filter(
-                    DailyLog.habit_id == habit_id,
-                    DailyLog.log_date == date.today()
-                ).first()
-
-                if log and log.completed is False:
-                    log.failure_reason = reason_key
-                    session.commit()
-
-                responses = Messages.FAILURE_REASON_RESPONSES.get(reason_key, [])
-                if responses:
-                    reply = random.choice(responses)
-                    reply += Messages.FAILURE_REASON_FOOTER
-                    await self.bot.send_message(user_id, reply)
-                else:
-                    await self.bot.send_message(
-                        user_id,
-                        f"ممنون که دلیلت رو گفتی 💙{Messages.FAILURE_REASON_FOOTER}"
-                    )
+            # [REMOVED] The entire "reason_" callback branch has been removed.
+            # Failure reason collection is now handled via text_message_handler
+            # in the 'waiting_for_failure_reason' state.
 
             elif data.startswith("confirm_change_"):
                 habit_id = int(data.replace("confirm_change_", ""))
